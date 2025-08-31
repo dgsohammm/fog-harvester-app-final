@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electrostatic Fog Harvesting Potential</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .range-lg::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #22d3ee; cursor: pointer; border-radius: 50%; border: 2px solid #fff; }
+        .range-lg::-moz-range-thumb { width: 20px; height: 20px; background: #22d3ee; cursor: pointer; border-radius: 50%; border: 2px solid #fff; }
+        @keyframes fall { from { transform: translateY(-10px); opacity: 1; } to { transform: translateY(16rem); opacity: 0; } }
+        @keyframes fall-and-collect { 0% { transform: translateY(-10px) translateX(0); opacity: 1; } 50% { opacity: 1; } 100% { transform: translateY(12rem) translateX(var(--drift, 0px)); opacity: 1; } }
+        .droplet { animation-name: fall-and-collect; animation-timing-function: cubic-bezier(0.55, 0.085, 0.68, 0.53); animation-fill-mode: forwards; }
+        .missed-droplet { animation-name: fall; animation-timing-function: linear; animation-fill-mode: forwards; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-900" style="background: radial-gradient(ellipse at bottom, #1b2735 0%, #090a0f 100%)">
+    <div id="root"></div>
+
+    <!-- React and Babel Scripts -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <script type="text/babel">
+      const { useState, useEffect, useMemo } = React;
+
+      const Card = ({ children, className = '' }) => (
+        <div className={`bg-white bg-opacity-10 backdrop-blur-lg rounded-xl shadow-lg p-6 ${className}`}>
+          {children}
+        </div>
+      );
+
+      const Slider = ({ label, value, min, max, step, onChange, unit }) => (
+        <div className="w-full">
+          <label className="flex justify-between items-center text-sm font-medium text-white mb-2">
+            <span>{label}</span>
+            <span className="text-cyan-300 font-bold">{value} {unit}</span>
+          </label>
+          <input
+            type="range"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={onChange}
+            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer range-lg"
+            style={{
+              background: `linear-gradient(to right, #22d3ee 0%, #22d3ee ${(value - min) / (max - min) * 100}%, #4b5563 ${(value - min) / (max - min) * 100}%, #4b5563 100%)`
+            }}
+          />
+        </div>
+      );
+
+      const App = () => {
+        const presetScenarios = {
+          "Coastal Desert": { fogDensity: 10, windSpeed: 1.5, efficiency: 12, cost: 0.38 },
+          "Inland Desert": { fogDensity: 6, windSpeed: 1.2, efficiency: 8, cost: 0.38 },
+          "Highland/Mountainous": { fogDensity: 8, windSpeed: 1.3, efficiency: 10, cost: 0.38 },
+          "Custom": { fogDensity: 5, windSpeed: 1, efficiency: 10, cost: 0.38 },
+        };
+
+        const [scenario, setScenario] = useState("Coastal Desert");
+        const [collectorType, setCollectorType] = useState("Electrostatic");
+        const [collectorArea, setCollectorArea] = useState(10000);
+        const [numUnits, setNumUnits] = useState(10);
+        
+        const [fogDensity, setFogDensity] = useState(presetScenarios[scenario].fogDensity);
+        const [windSpeed, setWindSpeed] = useState(presetScenarios[scenario].windSpeed);
+
+        const passiveEfficiency = 2;
+
+        const collectionEfficiency = useMemo(() => {
+          return collectorType === 'Electrostatic' ? presetScenarios[scenario].efficiency : passiveEfficiency;
+        }, [collectorType, scenario, presetScenarios]);
+        
+        const costPerLiter = useMemo(() => {
+           return collectorType === 'Electrostatic' ? presetScenarios[scenario].cost : 0.90;
+        }, [collectorType, scenario, presetScenarios]);
+
+        useEffect(() => {
+          if (scenario !== "Custom") {
+            setFogDensity(presetScenarios[scenario].fogDensity);
+            setWindSpeed(presetScenarios[scenario].windSpeed);
+          }
+        }, [scenario]);
+
+        const { waterCollectedPerNight, populationSupported, annualYield } = useMemo(() => {
+          const avgFogDuration = 10;
+          const airVol = collectorArea * windSpeed * avgFogDuration * 3600;
+          const theoretical = (airVol * fogDensity) / 1000;
+          const collected = (theoretical * (collectionEfficiency / 100)) * numUnits;
+          const annual = collected * 180;
+          const population = Math.floor(annual / (2 * 365));
+          
+          return {
+            waterCollectedPerNight: collected,
+            populationSupported: population,
+            annualYield: annual
+          };
+        }, [fogDensity, windSpeed, collectionEfficiency, collectorArea, numUnits]);
+        
+        const Droplet = ({ left, animationDuration, animationDelay }) => (
+          <div 
+            className="absolute w-1 h-1 bg-cyan-200 rounded-full droplet"
+            style={{ 
+              left: `${left}%`, 
+              animationDuration: `${animationDuration}s`,
+              animationDelay: `${animationDelay}s`,
+              top: '-5px',
+            }}
+          />
+        );
+
+        const numDroplets = 100;
+        const capturedDropletsCount = Math.round((collectionEfficiency / 15) * numDroplets);
+
+        return (
+          <div className="min-h-screen flex items-center justify-center p-4">
+            <div className="w-full max-w-6xl mx-auto">
+              <header className="text-center mb-8">
+                <h1 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-500">
+                  Electrostatic Fog Harvesting Potential
+                </h1>
+                <p className="text-lg text-gray-400 mt-2">Interactive Simulation Model</p>
+              </header>
+
+              <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-1 flex flex-col gap-6">
+                  <Card>
+                    <h2 className="text-xl font-semibold mb-4 border-b border-gray-600 pb-2">Configuration</h2>
+                    <div>
+                      <label className="block text-sm font-medium mb-2">Preset Scenario</label>
+                      <select value={scenario} onChange={e => setScenario(e.target.value)} className="w-full bg-gray-700 border-gray-600 rounded-md p-2 focus:ring-cyan-500 focus:border-cyan-500">
+                        {Object.keys(presetScenarios).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium mb-2">Collector Technology</label>
+                      <div className="flex bg-gray-700 rounded-lg p-1">
+                        <button onClick={() => setCollectorType('Electrostatic')} className={`w-1/2 py-2 text-sm rounded-md transition-all duration-300 ${collectorType === 'Electrostatic' ? 'bg-cyan-500 shadow-lg' : 'hover:bg-gray-600'}`}>Electrostatic</button>
+                        <button onClick={() => setCollectorType('Passive Mesh')} className={`w-1/2 py-2 text-sm rounded-md transition-all duration-300 ${collectorType === 'Passive Mesh' ? 'bg-blue-500 shadow-lg' : 'hover:bg-gray-600'}`}>Passive Mesh</button>
+                      </div>
+                    </div>
+                  </Card>
+                  
+                  <Card>
+                    <h2 className="text-xl font-semibold mb-4 border-b border-gray-600 pb-2">Environmental Conditions</h2>
+                    <div className="space-y-4">
+                      <Slider label="Fog Density" value={fogDensity} min={1} max={15} step={0.1} onChange={e => {setFogDensity(parseFloat(e.target.value)); setScenario("Custom")}} unit="g/m³" />
+                      <Slider label="Wind Speed" value={windSpeed} min={0.5} max={5} step={0.1} onChange={e => {setWindSpeed(parseFloat(e.target.value)); setScenario("Custom")}} unit="m/s" />
+                    </div>
+                  </Card>
+
+                  <Card>
+                    <h2 className="text-xl font-semibold mb-4 border-b border-gray-600 pb-2">System Scale</h2>
+                    <div className="space-y-4">
+                      <Slider label="Collector Area" value={collectorArea} min={100} max={20000} step={100} onChange={e => setCollectorArea(parseFloat(e.target.value))} unit="m²" />
+                      <Slider label="Number of Units" value={numUnits} min={1} max={50} step={1} onChange={e => setNumUnits(parseInt(e.target.value))} unit="" />
+                    </div>
+                  </Card>
+                </div>
+
+                <div className="lg:col-span-2 flex flex-col gap-8">
+                  <Card className="relative h-64 flex flex-col justify-end overflow-hidden">
+                     <div className="absolute inset-0 z-0 droplet-container">
+                          {Array.from({ length: numDroplets }).map((_, i) => (
+                               i < capturedDropletsCount ? (
+                                  <Droplet key={i} left={Math.random() * 100} animationDuration={1 + Math.random()} animationDelay={Math.random() * 2} />
+                               ) : (
+                                  <div key={i} className="absolute w-1 h-1 bg-gray-500 rounded-full missed-droplet" style={{
+                                      left: `${Math.random() * 100}%`,
+                                      animationDuration: `${1 + Math.random()}s`,
+                                      animationDelay: `${Math.random() * 2}s`,
+                                      top: '-5px',
+                                  }}></div>
+                               )
+                          ))}
+                      </div>
+                    <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-blue-900 to-transparent z-10"></div>
+                    <div className="absolute inset-x-0 bottom-0 flex justify-center items-end z-20 p-4">
+                       <div className="w-full h-2 bg-cyan-400 rounded-full shadow-[0_0_15px_rgba(34,211,238,0.7)] collector-mesh"></div>
+                    </div>
+                     <div className="absolute top-4 left-4 bg-black bg-opacity-50 p-2 rounded-lg z-30">
+                      <p className="text-sm">Efficiency: <span className="font-bold text-cyan-300">{collectionEfficiency.toFixed(1)}%</span></p>
+                    </div>
+                  </Card>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <Card className="text-center">
+                          <h3 className="text-sm text-gray-400">Water Collected</h3>
+                          <p className="text-2xl font-bold text-cyan-300">{waterCollectedPerNight.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                          <p className="text-xs text-gray-500">Liters / Night</p>
+                      </Card>
+                      <Card className="text-center">
+                          <h3 className="text-sm text-gray-400">Annual Yield</h3>
+                          <p className="text-2xl font-bold text-cyan-300">{(annualYield / 1_000_000).toFixed(2)}M</p>
+                          <p className="text-xs text-gray-500">Liters / Year</p>
+                      </Card>
+                       <Card className="text-center">
+                          <h3 className="text-sm text-gray-400">Population Supported</h3>
+                          <p className="text-2xl font-bold text-cyan-300">{populationSupported.toLocaleString()}</p>
+                          <p className="text-xs text-gray-500">People / Year</p>
+                      </Card>
+                       <Card className="text-center">
+                          <h3 className="text-sm text-gray-400">Cost Efficiency</h3>
+                          <p className="text-2xl font-bold text-cyan-300">₹{costPerLiter.toFixed(2)}</p>
+                          <p className="text-xs text-gray-500">per Liter (5-Yr Avg)</p>
+                      </Card>
+                  </div>
+                </div>
+              </main>
+            </div>
+          </div>
+        );
+      };
+
+      const container = document.getElementById('root');
+      const root = ReactDOM.createRoot(container);
+      root.render(<App />);
+    </script>
+</body>
+</html>
