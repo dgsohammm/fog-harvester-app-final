@@ -11,10 +11,24 @@
         }
         .range-lg::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; background: #22d3ee; cursor: pointer; border-radius: 50%; border: 2px solid #fff; }
         .range-lg::-moz-range-thumb { width: 20px; height: 20px; background: #22d3ee; cursor: pointer; border-radius: 50%; border: 2px solid #fff; }
-        @keyframes fall { from { transform: translateY(-10px); opacity: 1; } to { transform: translateY(16rem); opacity: 0; } }
-        @keyframes fall-and-collect { 0% { transform: translateY(-10px) translateX(0); opacity: 1; } 50% { opacity: 1; } 100% { transform: translateY(12rem) translateX(var(--drift, 0px)); opacity: 1; } }
-        .droplet { animation-name: fall-and-collect; animation-timing-function: cubic-bezier(0.55, 0.085, 0.68, 0.53); animation-fill-mode: forwards; }
-        .missed-droplet { animation-name: fall; animation-timing-function: linear; animation-fill-mode: forwards; }
+        
+        /* Updated animation keyframes for a smooth loop */
+        @keyframes fall { 
+            from { transform: translateY(-10px); opacity: 1; } 
+            to { transform: translateY(16rem); opacity: 0; } 
+        }
+        
+        /* Updated droplet classes to loop infinitely */
+        .droplet { 
+            animation-name: fall; 
+            animation-timing-function: linear; 
+            animation-iteration-count: infinite; 
+        }
+        .missed-droplet { 
+            animation-name: fall; 
+            animation-timing-function: linear; 
+            animation-iteration-count: infinite; 
+        }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -89,7 +103,7 @@
             setFogDensity(presetScenarios[scenario].fogDensity);
             setWindSpeed(presetScenarios[scenario].windSpeed);
           }
-        }, [scenario]);
+        }, [scenario, presetScenarios]);
 
         const { waterCollectedPerNight, populationSupported, annualYield } = useMemo(() => {
           const avgFogDuration = 10;
@@ -106,9 +120,9 @@
           };
         }, [fogDensity, windSpeed, collectionEfficiency, collectorArea, numUnits]);
         
-        const Droplet = ({ left, animationDuration, animationDelay }) => (
+        const Droplet = ({ left, animationDuration, animationDelay, colorClass }) => (
           <div 
-            className="absolute w-1 h-1 bg-cyan-200 rounded-full droplet"
+            className={`absolute w-1 h-1 ${colorClass} rounded-full droplet`}
             style={{ 
               left: `${left}%`, 
               animationDuration: `${animationDuration}s`,
@@ -170,18 +184,25 @@
                 <div className="lg:col-span-2 flex flex-col gap-8">
                   <Card className="relative h-64 flex flex-col justify-end overflow-hidden">
                      <div className="absolute inset-0 z-0 droplet-container">
-                          {Array.from({ length: numDroplets }).map((_, i) => (
-                               i < capturedDropletsCount ? (
-                                  <Droplet key={i} left={Math.random() * 100} animationDuration={1 + Math.random()} animationDelay={Math.random() * 2} />
-                               ) : (
-                                  <div key={i} className="absolute w-1 h-1 bg-gray-500 rounded-full missed-droplet" style={{
-                                      left: `${Math.random() * 100}%`,
-                                      animationDuration: `${1 + Math.random()}s`,
-                                      animationDelay: `${Math.random() * 2}s`,
-                                      top: '-5px',
-                                  }}></div>
-                               )
-                          ))}
+                          {Array.from({ length: numDroplets }).map((_, i) => {
+                                const isPassive = collectorType === 'Passive Mesh';
+                                // Faster for electrostatic, slower for passive, with a bigger difference
+                                const duration = isPassive ? 4 + Math.random() * 2 : 1 + Math.random() * 1.5; 
+                                const delay = Math.random() * (isPassive ? 5 : 2); // More spread out for passive
+                                // Different colors for captured droplets
+                                const dropletColor = isPassive ? 'bg-blue-300' : 'bg-cyan-200';
+                               
+                                return i < capturedDropletsCount ? (
+                                   <Droplet key={i} left={Math.random() * 100} animationDuration={duration} animationDelay={delay} colorClass={dropletColor} />
+                                ) : (
+                                   <div key={i} className="absolute w-1 h-1 bg-gray-500 rounded-full missed-droplet" style={{
+                                       left: `${Math.random() * 100}%`,
+                                       animationDuration: `${duration}s`,
+                                       animationDelay: `${delay}s`,
+                                       top: '-5px',
+                                   }}></div>
+                                )
+                          })}
                       </div>
                     <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-blue-900 to-transparent z-10"></div>
                     <div className="absolute inset-x-0 bottom-0 flex justify-center items-end z-20 p-4">
@@ -227,3 +248,4 @@
     </script>
 </body>
 </html>
+
